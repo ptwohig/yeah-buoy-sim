@@ -283,4 +283,4 @@ For a majority of commands, there should only be simple data integrity checks, s
 
 A shared secret is a secret string of bytes which combined with the HMAC will ensure that the requested opcode comes from the designated control operator. The shared secret will never be transmitted on the radio and must be determined before the buoy leaves the dock.
 
-If the shared secret is comprimised
+If the shared secret becomes compromised, it will require physical retrieval of the buoy and resetting of the shared secret.
