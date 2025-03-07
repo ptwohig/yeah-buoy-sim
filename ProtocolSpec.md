@@ -220,26 +220,64 @@ This is a datagram indicating the sea state as recorded by the buoys onboard sen
 
 ##### Notes on Priority
 
-Please refer to the [Beaufort Scale](https://www.weather.gov/pqr/beaufort) for the meaning of wave height. The buoy's mechanical design is to tolerate "Near Gale" conditions. At the time of this writing, it has not been tested in real world scenarios and only in virtual simulations.
+Please refer to the [Beaufort Scale](https://www.weather.gov/pqr/beaufort) for the meaning of wave height. The buoy's mechanical design is to tolerate "Near Gale" conditions. At the time of this writing, it has not been tested in real world scenarios and only in virtual simulations and this specification will likely be revised in the future.
 
 * **Beaufort 0 - 7** - Normal or lower priority
 * **Beaufort 8 - 11** - Higher than normal priority.
 * **Beaufort 12** - Don't be surprised if it sinks.
 
-#### Propulsion Error 0x04
+#### Error 0x04
 
-This is a datagram indicating that the buoy detected some sort of propulsion error. For example, if one or more thruster has wrapped kelp or other jetsam.
+This is a datagram indicating that the buoy detected some sort of error condition. For example, if one or more thruster has wrapped kelp or other jetsam.
 
 | 8 Bits        | 8 Bits        | 8 Bits      | 8 Bits      |
 | ---           | ---           | ---         | --          |
 | 0x1           | 0x0           | 0x0         | 0x4         |
 | Priority      | Flags         | Flags       | Flags       |
 | CRC32         | CRC32         | CRC32       | CRC32       |
-| 0x0           | 0x0           | 0x0         | 0x00        |
+| 0x0           | 0x0           | 0x0         | 0x0C        |
+| Code          | Code          | Code        | Code        |
+| Timestamp     | Timestamp     | Timestamp   | Timestamp   |
+| Timestamp     | Timestamp     | Timestamp   | Timestamp   |
+
+* **Code** - A 32-bit code indicating the cause of the failure. A zero indicates that no codes are present.
+* **Timestamp** - The timestamp, expressed in milliseconds from the [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) (January 1, 1970). 64-bit signed integer.
 
 ##### Notes on Priority
 
-This message should always be sent higher than normal as it indicates that the buoy may be experiencing distress and can't navigate to it's intended mark.
+* When no errors are present, the buoy should send this message regularly in order to indicate no errors are present. Additionally, the regular propulsion errors should be sent at low priority and sent sparingly.
+* When there is a transition from an error to non error state, these message should be sent at higher than normal priority. Additionally, the error-positive states should be sent with higher regularity than negative error states.
+ 
+#### SoC/SoH (State of Charge / State of Health) 0x05
+
+This Datagram indicates the buoy's state of charge and State of Health. Escalating priority in the event that the battery is low. State of Health is the ratio of the battery's actual capacity to it's rated max capacity as specified by the manufacturer. As the battery wears out, the SoH slowly degrades as the battery loses its ability to take charge. State of Charge is the ratio of charge remaining to the state of health. Over time and as a battery wears out a "100%" state of charge results in fewer watt hours availble to the system. A modern BMS can monitor these conditions and indicate when the cells require a replacement.
+
+| 8 Bits        | 8 Bits        | 8 Bits      | 8 Bits      |
+| ---           | ---           | ---         | --          |
+| 0x1           | 0x0           | 0x0         | 0x4         |
+| Priority      | Flags         | Flags       | Flags       |
+| CRC32         | CRC32         | CRC32       | CRC32       |
+| 0x0           | 0x0           | 0x0         | 0x0C        |
+| SoC Value     | SoC Value     | SoH Value   | SoH Value   |
+| Timestamp     | Timestamp     | Timestamp   | Timestamp   |
+| Timestamp     | Timestamp     | Timestamp   | Timestamp   |
+
+* **SoC Value** - A 16-bit unsigned integer indicating SoC reading, relative to SoH
+* ** SoH Value** - A 16-bit unsigned integer indicating SoH reading.
+* **Timestamp** - The timestamp, expressed in milliseconds from the [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) (January 1, 1970). 64-bit signed integer.
+
+##### How to interpret the SoC and SoH values
+
+The absolute max reference is the maximum value of an unsigned 16-bit integer (65,535 / 0xFFFF). Regardless as to how the BMS reports this value, the buoy's control software must calculate both values using that value.
+
+* % Battery Life Remaining = SoC / SoH
+* % Battery Health Remaining = SoH / 0xFFFF
+
+##### Notes on Priority
+
+
+* When Over 80% SoC remaining this datagram should be sent at normal or lower priority, regularly, and at low intervals.
+* when Under 20% SoC remaining this datagram should be sent at higher than normal priority and sent immediately and with greater frequency.
 
 # Datalink Architecture
 
@@ -259,7 +297,7 @@ Normal and lower priority messages should be buffered on AX.25 and sent on bulk 
 * **Navigate** - 256 bits or approximately 0.85 seconds (.75 with CRC disabled)
 * **Location** - 320 bits or approximately 1.05 seconds (0.96 with CRC disabled).
 * **Sea State** - 160 bits or approximately 0.53 seconds (0.42 seconds with CRC disabled)
-* **Propulsion Error** - 128 bits or approximately 0.42 seconds (.32 with CRC disabled).
+* **Propulsion Error** - 160 bits or approximately 0.53 seconds (0.42 seconds with CRC disabled)
 
 Note, none of the above estimations include AX.25 protocol overhead or time it takes to transmit under poor radio conditions.
 
