@@ -1,6 +1,8 @@
-# IoT Sensor Design
+# System Design and Protocol Specification
 
-This is simple architecture document for a sensor and control system for the [Yeah Buoy!](https://github.com/ptwohig/yeah-buoy-sim/) project. The intended firmware is running an embedded Linux connected to a controller using WiFi. The on board package will monitor data from three-axis accelerometers, gyroscopes, magnetic compass, and GPS to report position and sea state data. Additionally, the sensor package will assist in the navigation.
+This is simple architecture document for a sensor and control system for the [Yeah Buoy!](https://github.com/ptwohig/yeah-buoy-sim/) project. The intended firmware is running an embedded Linux connected to a controller using WiFi. The on board package will monitor data from three-axis accelerometers, gyroscopes, magnetic compass, and GPS to report position and sea state data. Additionally, the sensor package will assist in the navigation by providing positional data allowing the motor controller to control the thrusters accurately.
+
+![System Block Diagram](BlockDiagram.png)
 
 ## Required Equipment
 
@@ -10,6 +12,7 @@ This is simple architecture document for a sensor and control system for the [Ye
 * [2x APISQUEEN 7.5kg Thruster](https://www.underwaterthruster.com/products/u5-12v-24v-7kg-thrust-brushless-underwater-thruster-propeller-propulsion-with-bi-directional-control-esc-for-rov-and-boat)
 * [2x APISQUEEN 45A Electronic Speed Controller](https://www.underwaterthruster.com/products/apisqueen-12-24v-3-6s-lipo-45a-bi-directional-esc-to-control-brushless-motors-propellers-in-forward-or-reverse-rotation)
 * [SeaView Cable Seal](https://www.westmarine.com/seaview-cable-seals-20702601.html)
+* [Daly Smart BMS 8S](https://bmsdaly.com/collections/smart/products/daly-smart-bms-lfp-4s-7s-8s-16s-20s-24s-li-ion-3s-7s-13s-14s-16s-20s)
 
 ## Hardware Notes
 
@@ -18,6 +21,11 @@ The following re the notes on the selected hardware for the buoy, taking hardwar
 ### Raspberry Pi 5
 
 The Raspberry Pi 5 was selected for it's ease of use, availability of software, hardware add-ons, cost, and versatility. It is capable of running Embedded Linux and has low power draw making software development comparatively easy.
+
+Other features which make the Rapsberry Pi a good choice:
+* **Onboard Sound Card** - It is possible to use the sound card output as a way to generate HF, VHF, and UHF modulated signals using a tool like [Dire Wolf](https://github.com/wb2osz/direwolf). The frequencies required for low-speed data transmission are well within the sampling rate of the onboard sound card and the programming interface is relatively simple.
+* **USB Ports** - The USB ports can be used to interface with a radio using a TTY/Serial connection to send data through a protocol like [DMR](https://www.dmrassociation.org/dmr-standards.html) or [DStar](https://www.icomamerica.com/lineup/amateur/D-STAR/)
+* **Low Power Consumption at Idle** - At idle, the raspberry pi uses very low power and adjustments for sample rate of sensors give the software a great deal of control over how 
 
 ### Waveshare Sense HAT-C
 
@@ -45,6 +53,12 @@ The ESC (Eletronic Speed Control) modules appear to be a MOSFET or similar inlin
 ### SeaView Cable Seal
 
 A simple and affordable cable pass-through for wires. Can be used for both signal and control wires. May options exist but this provides a watertight seal between the inside and outside of the buoy.
+
+### DalyBMS 8S
+
+The DalyBMS is an 8S (8 Series) LifePO4 capable Battery Management System. It is capable of communicating with a computer via USB-CAN or USB-UART bridge. This allows the onboard computer to monitor battery state and set alersts/alarms if power is running low or batteries are malfunctioning.
+
+The BMS Is critical for safe operation of Lithium batteries.
 
 # Network Protocol
 
@@ -252,3 +266,21 @@ Note, none of the above estimations include AX.25 protocol overhead or time it t
 ## TCP
 
 On WiFi and similar networks the transmission time is trivial. It is advantageous to batch several minutes worth of messages. A bridge from radio to WiFi to cloud for long term data storage could relay or enable bidirectional communication over Websockets.
+
+# Buoy to Cloud Connection
+
+Since the buoy can serve multiple purposes, including reporting wave height and radio propagation information, it will ultimately be possible to connect the buoy to a cloud service to log the data it records and drive alerts to error and warning conditions.
+
+## Websockets
+
+The shoreside monitoring station consists of a relay server which receives and parses the datagrams per the protocol specification. Upon successful verification, such as HMAC and/or CRC32, the relay server will upload the datagrams to a server via websocket.
+
+Additionally, while connected to the cloud, the relay server will buffer and forward any messages to the buoy over the designated frequency. On the remote instance, the cloud server must perform additional checks.
+
+## Shared Secret
+
+For a majority of commands, there should only be simple data integrity checks, such as CRC32. However, commands like repositioning or updating the navigational target MUST use HMAC-256 and a shared secret to ensure that only the designed control operator may move the buoy.
+
+A shared secret is a secret string of bytes which combined with the HMAC will ensure that the requested opcode comes from the designated control operator. The shared secret will never be transmitted on the radio and must be determined before the buoy leaves the dock.
+
+If the shared secret is comprimised
